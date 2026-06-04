@@ -132,7 +132,7 @@ elif choice == "RAG AI":
                 "https://interview-ai-rag-production.up.railway.app/topic",
                 json={"topic": question}
             )
-            
+
 
             if response.status_code == 200:
 
