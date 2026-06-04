@@ -10,5 +10,6 @@ langchain-huggingface
 faiss-cpu
 pypdf
 huggingface-hub
+sentence-transformers
 streamlit
 requests
