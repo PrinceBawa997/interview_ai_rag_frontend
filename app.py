@@ -128,10 +128,11 @@ elif choice == "RAG AI":
     if st.button("Ask AI"):
 
         try:
-            response = requests.post(
-                f"{API_URL}/topic",
-                json={"question": question}
+            requests.post(
+                "https://interview-ai-rag-production.up.railway.app/topic",
+                json={"topic": question}
             )
+            
 
             if response.status_code == 200:
 
