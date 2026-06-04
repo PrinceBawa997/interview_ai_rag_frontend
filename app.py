@@ -100,9 +100,9 @@ elif choice == "RAG AI":
     if st.button("Ask AI"):
 
         try:
-
             response = requests.post(
-                "http://127.0.0.1:8000/ask",
+                "https://interview-ai-rag-production.up.railway.app/topic",
+
                 json={"question": question}
             )
 
