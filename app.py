@@ -29,10 +29,7 @@ if choice == "Interview AI":
 
     st.header("🎤 AI Interview Assistant")
 
-    topic = st.text_input(
-        "Enter Topic",
-        placeholder="Python, Java, DBMS"
-    )
+    topic = st.text_input("Enter Topic", placeholder="Python, Java, DBMS")
 
     if st.button("Start Interview"):
 
@@ -44,12 +41,9 @@ if choice == "Interview AI":
 
             if response.status_code == 200:
                 data = response.json()
-                question = data.get("topic", "No question returned")
-
-                st.session_state["question"] = question
+                st.session_state["question"] = data.get("topic", "No question returned")
             else:
-                st.error(f"Error: {response.status_code}")
-                st.text(response.text)
+                st.error(response.text)
 
         except Exception as e:
             st.error(f"Connection Error: {e}")
@@ -71,18 +65,13 @@ if choice == "Interview AI":
 
                 if response.status_code == 200:
                     data = response.json()
-                    result = data.get("Answer", "No feedback returned")
-
                     st.subheader("Interview Feedback")
-                    st.success(result)
-
+                    st.success(data.get("Answer", "No feedback returned"))
                 else:
-                    st.error(f"Error: {response.status_code}")
-                    st.text(response.text)
+                    st.error(response.text)
 
             except Exception as e:
                 st.error(f"Connection Error: {e}")
-
 
 # =========================
 # RAG AI
@@ -91,10 +80,7 @@ elif choice == "RAG AI":
 
     st.header("📄 PDF Question Answering")
 
-    pdf = st.file_uploader(
-        "Upload PDF",
-        type=["pdf"]
-    )
+    pdf = st.file_uploader("Upload PDF", type=["pdf"])
 
     if pdf is not None:
 
@@ -102,11 +88,7 @@ elif choice == "RAG AI":
 
             try:
                 files = {
-                    "file": (
-                        pdf.name,
-                        pdf.getvalue(),
-                        "application/pdf"
-                    )
+                    "file": (pdf.name, pdf.getvalue(), "application/pdf")
                 }
 
                 response = requests.post(
@@ -117,8 +99,7 @@ elif choice == "RAG AI":
                 if response.status_code == 200:
                     st.success("PDF Uploaded Successfully")
                 else:
-                    st.error(f"Upload Failed: {response.status_code}")
-                    st.text(response.text)
+                    st.error(response.text)
 
             except Exception as e:
                 st.error(f"Connection Error: {e}")
@@ -128,30 +109,22 @@ elif choice == "RAG AI":
     if st.button("Ask AI"):
 
         try:
-            requests.post(
-                "https://interview-ai-rag-production.up.railway.app/topic",
-                json={"topic": question}
+            response = requests.post(
+                f"{API_URL}/ask",
+                json={"question": question}
             )
 
-
             if response.status_code == 200:
-
                 data = response.json()
 
                 if "answer" in data:
                     st.subheader("Answer")
                     st.write(data["answer"])
-
-                elif "error" in data:
-                    st.error(data["error"])
-
                 else:
-                    st.warning("Unexpected response")
-                    st.write(data)
+                    st.error(data.get("error", "Unexpected response"))
 
             else:
-                st.error(f"API Error: {response.status_code}")
-                st.text(response.text)
+                st.error(response.text)
 
         except Exception as e:
             st.error(f"Connection Error: {e}")
