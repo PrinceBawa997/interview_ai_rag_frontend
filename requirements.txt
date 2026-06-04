@@ -10,3 +10,5 @@ langchain-huggingface
 faiss-cpu
 pypdf
 huggingface-hub
+streamlit
+requests
