@@ -1,4 +1,10 @@
 .env
+.venv/
+__pycache__/
+.idea/
+faiss_index/
+Faiss_index/
+*.pdf.env
 .env.py
 __pycache__/
 .venv/
