@@ -1,39 +1,42 @@
 import os
+import traceback
 from fastapi import FastAPI, UploadFile, File
-from langchain_google_genai import ChatGoogleGenerativeAI
+from pydantic import BaseModel
 from dotenv import load_dotenv
+
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from pydantic import BaseModel
 
 load_dotenv()
 
 app = FastAPI()
 
 # =========================
-# LLM
+# GEMINI LLM
 # =========================
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
-    temperature=0.3
+    temperature=0.3,
+    google_api_key=os.getenv("GOOGLE_API_KEY")
 )
 
 # =========================
-# GLOBAL EMBEDDING (FIXED)
+# EMBEDDINGS (GEMINI)
 # =========================
-import google.generativeai as genai
-
-
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-
 embedding = GoogleGenerativeAIEmbeddings(
-    model="models/embedding-001"
-
+    model="models/embedding-001",
+    google_api_key=os.getenv("GOOGLE_API_KEY")
 )
 
 # =========================
-# INTERVIEW AI
+# GLOBAL STATE
+# =========================
+vectorstore = None
+current_topic = ""
+
+# =========================
+# MODELS
 # =========================
 class RequestTopic(BaseModel):
     topic: str
@@ -41,137 +44,112 @@ class RequestTopic(BaseModel):
 class RequestAnswer(BaseModel):
     Answer: str
 
-current_topic = ""
+class Question(BaseModel):
+    question: str
 
+# =========================
+# INTERVIEW TOPIC
+# =========================
 @app.post("/topic")
 async def topic(data: RequestTopic):
     global current_topic
     current_topic = data.topic
 
     prompt = f"""
-Ask only easy interview questions at first and increase difficulty gradually.
+Ask interview questions.
 
 Topic: {data.topic}
-
-Generate ONLY ONE interview question.
-Do not provide answer.
+Generate ONE question only.
 """
 
     response = llm.invoke(prompt)
 
-    question = response.content
-    if isinstance(question, list):
-        question = question[0]["text"]
+    return {"question": response.content}
 
-    return {"topic": question}
-
-
+# =========================
+# ANSWER CHECK
+# =========================
 @app.post("/answer")
 async def answer(data: RequestAnswer):
-    global current_topic
 
     prompt = f"""
-You are an expert interviewer.
+Evaluate answer.
 
-Answer = {data.Answer}
+Answer: {data.Answer}
 
-Tasks:
-1. Check if answer is correct
-2. Give score out of 10
-3. Explain mistakes
-4. Give correct answer
-5. Ask next question
-
-Format:
-Score:
-Feedback:
-Correct Answer:
-Next Question:
+Give:
+Score out of 10
+Feedback
+Correct Answer
+Next Question
 """
 
     response = llm.invoke(prompt)
 
-    result = response.content
-    if isinstance(result, list):
-        result = result[0]["text"]
-
-    return {"Answer": result}
-
+    return {"result": response.content}
 
 # =========================
-# RAG SYSTEM
+# PDF UPLOAD (FIXED FOR RAILWAY)
 # =========================
-vectorstore = None
-
-
 @app.post("/pdf")
 async def read_pdf(file: UploadFile = File(...)):
+
     global vectorstore
 
     try:
-        contents = await file.read()
-
-        file_path = f"temp_{file.filename}"
+        # 🔥 MUST USE /tmp ON RAILWAY
+        file_path = f"/tmp/{file.filename}"
 
         with open(file_path, "wb") as f:
-            f.write(contents)
+            f.write(await file.read())
 
         loader = PyPDFLoader(file_path)
         documents = loader.load()
 
         text = " ".join([doc.page_content for doc in documents])
 
+        if not text.strip():
+            return {"error": "PDF is empty"}
+
         words = text.split()
 
-        chunk_size = 100
-        chunk_overlap = 10
+        chunk_size = 300
+        overlap = 50
         chunks = []
 
-        for i in range(0, len(words), chunk_size - chunk_overlap):
-            chunk = words[i:i + chunk_size]
-            chunks.append(" ".join(chunk))
+        for i in range(0, len(words), chunk_size - overlap):
+            chunks.append(" ".join(words[i:i + chunk_size]))
 
         vectorstore = FAISS.from_texts(chunks, embedding)
 
         os.remove(file_path)
 
-        return {"message": "file uploaded successfully"}
+        return {"message": "PDF uploaded successfully", "chunks": len(chunks)}
 
     except Exception as e:
+        print(traceback.format_exc())
         return {"error": str(e)}
 
-
 # =========================
-# ASK FROM PDF
+# ASK PDF
 # =========================
-class Question(BaseModel):
-    question: str
-
-
 @app.post("/ask")
 async def ask(data: Question):
 
     global vectorstore
 
     try:
-
         if vectorstore is None:
-            return {"error": "Upload PDF first"}
+            return {"error": "Please upload PDF first"}
 
-        docs = vectorstore.similarity_search(
-            data.question,
-            k=5
-        )
+        docs = vectorstore.similarity_search(data.question, k=4)
 
-        context = "\n".join([doc.page_content for doc in docs])
+        context = "\n".join([d.page_content for d in docs])
 
         prompt = f"""
-You are a smart AI assistant.
+Answer ONLY using context.
 
-Answer ONLY using the PDF context.
-
-Question:
-{data.question}
+Question: {data.question}
 
 Context:
 {context}
@@ -179,14 +157,11 @@ Context:
 
         response = llm.invoke(prompt)
 
-        answer = response.content
-        if isinstance(answer, list):
-            answer = answer[0]["text"]
-
         return {
             "question": data.question,
-            "answer": str(answer)
+            "answer": response.content
         }
 
     except Exception as e:
+        print(traceback.format_exc())
         return {"error": str(e)}
