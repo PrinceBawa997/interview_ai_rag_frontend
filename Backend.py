@@ -4,7 +4,7 @@ from fastapi import FastAPI, UploadFile, File
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import PyPDFLoader
 
@@ -24,9 +24,11 @@ llm = ChatGoogleGenerativeAI(
 # =========================
 # EMBEDDINGS (GEMINI)
 # =========================
-embedding = GoogleGenerativeAIEmbeddings(
-    model="models/embedding-001",
-    google_api_key=os.getenv("GOOGLE_API_KEY")
+
+from langchain_community.embeddings import HuggingFaceEmbeddings
+
+embedding = HuggingFaceEmbeddings(
+    model_name="all-MiniLM-L6-v2"
 )
 
 # =========================
@@ -50,54 +52,12 @@ class Question(BaseModel):
 # =========================
 # INTERVIEW TOPIC
 # =========================
-@app.post("/topic")
-async def topic(data: RequestTopic):
-    global current_topic
-    current_topic = data.topic
 
-    prompt = f"""
-Ask interview questions.
-
-Topic: {data.topic}
-Generate ONE question only.
-"""
-
-    response = llm.invoke(prompt)
-
-    return {"question": response.content}
-
-# =========================
-# ANSWER CHECK
-# =========================
-@app.post("/answer")
-async def answer(data: RequestAnswer):
-
-    prompt = f"""
-Evaluate answer.
-
-Answer: {data.Answer}
-
-Give:
-Score out of 10
-Feedback
-Correct Answer
-Next Question
-"""
-
-    response = llm.invoke(prompt)
-
-    return {"result": response.content}
-
-# =========================
-# PDF UPLOAD (FIXED FOR RAILWAY)
-# =========================
 @app.post("/pdf")
 async def read_pdf(file: UploadFile = File(...)):
-
     global vectorstore
 
     try:
-        # 🔥 MUST USE /tmp ON RAILWAY
         file_path = f"/tmp/{file.filename}"
 
         with open(file_path, "wb") as f:
@@ -108,17 +68,20 @@ async def read_pdf(file: UploadFile = File(...)):
 
         text = " ".join([doc.page_content for doc in documents])
 
-        if not text.strip():
-            return {"error": "PDF is empty"}
-
         words = text.split()
 
-        chunk_size = 300
-        overlap = 50
         chunks = []
+        chunk_size = 200
+        overlap = 40
 
         for i in range(0, len(words), chunk_size - overlap):
             chunks.append(" ".join(words[i:i + chunk_size]))
+
+        # ✅ CREATE EMBEDDING HERE (FIX)
+        embedding = GoogleGenerativeAIEmbeddings(
+            model="models/text-embedding-004",
+            google_api_key=os.getenv("GOOGLE_API_KEY")
+        )
 
         vectorstore = FAISS.from_texts(chunks, embedding)
 
@@ -127,7 +90,6 @@ async def read_pdf(file: UploadFile = File(...)):
         return {"message": "PDF uploaded successfully", "chunks": len(chunks)}
 
     except Exception as e:
-        print(traceback.format_exc())
         return {"error": str(e)}
 
 # =========================
