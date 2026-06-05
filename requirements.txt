@@ -2,13 +2,11 @@ fastapi
 uvicorn
 python-multipart
 
-sentence-transformers==2.2.2
-torch==2.2.0
+google-generativeai
+langchain-google-genai
 
-transformers
 faiss-cpu
 pypdf
 
 langchain
 langchain-community
-langchain-huggingface

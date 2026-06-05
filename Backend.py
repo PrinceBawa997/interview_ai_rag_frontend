@@ -4,7 +4,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from pydantic import BaseModel
 
 load_dotenv()
@@ -22,8 +22,14 @@ llm = ChatGoogleGenerativeAI(
 # =========================
 # GLOBAL EMBEDDING (FIXED)
 # =========================
-embedding = HuggingFaceEmbeddings(
-    model_name="all-MiniLM-L6-v2"
+import google.generativeai as genai
+
+
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+
+embedding = GoogleGenerativeAIEmbeddings(
+    model="models/embedding-001"
+
 )
 
 # =========================
